@@ -68,6 +68,7 @@ pub struct AgentBuilder {
     approval_broker: Option<zene_permission::SharedApprovalBroker>,
     external_session_id: Option<String>,
     include_workspace_context: Option<bool>,
+    deny_git_push: Option<bool>,
     extensions: Vec<Arc<dyn ExtensionHook>>,
 }
 
@@ -101,6 +102,7 @@ impl AgentBuilder {
             approval_broker: None,
             external_session_id: None,
             include_workspace_context: None,
+            deny_git_push: None,
             extensions: Vec::new(),
         }
     }
@@ -232,6 +234,12 @@ impl AgentBuilder {
         self
     }
 
+    /// Restrict `git push` / `gh` CLI invocations.
+    pub fn deny_git_push(mut self, deny: bool) -> Self {
+        self.deny_git_push = Some(deny);
+        self
+    }
+
     pub async fn build(mut self) -> Result<Agent> {
         let local = self.sandbox;
         let workdir = local.workdir().to_path_buf();
@@ -337,6 +345,7 @@ impl AgentBuilder {
                 self.permission_mode,
                 permission_rules_from_config(&self.config),
                 auto_allow_bash,
+                self.deny_git_push,
             ),
         };
 
@@ -419,10 +428,13 @@ pub(crate) fn shared_permission_with_rules(
     mode: PermissionMode,
     rules: Vec<PermissionRule>,
     auto_allow_bash: bool,
+    deny_git_push: Option<bool>,
 ) -> SharedToolPermission {
-    Arc::new(Mutex::new(
-        PermissionGate::new(mode)
-            .with_rules(rules)
-            .with_auto_allow_bash(auto_allow_bash),
-    ))
+    let mut gate = PermissionGate::new(mode)
+        .with_rules(rules)
+        .with_auto_allow_bash(auto_allow_bash);
+    if let Some(deny) = deny_git_push {
+        gate.set_deny_git_push(deny);
+    }
+    Arc::new(Mutex::new(gate))
 }

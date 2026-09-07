@@ -128,16 +128,11 @@ impl TurnState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum QueueMode {
+    #[default]
     OneAtATime,
     All,
-}
-
-impl Default for QueueMode {
-    fn default() -> Self {
-        Self::OneAtATime
-    }
 }
 
 /// Buffered steer messages injected between model steps.

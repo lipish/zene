@@ -21,35 +21,61 @@ struct PublishArgs {
 }
 
 #[derive(Debug, Clone)]
-struct CloudPublishConfig {
-    api_url: String,
-    token: String,
-    run_id: String,
+pub struct CloudPublishConfig {
+    pub api_url: String,
+    pub token: String,
+    pub run_id: String,
 }
 
-pub struct PublishGithubTool;
-
-impl PublishGithubTool {
-    pub fn available() -> bool {
-        cloud_publish_config().is_some()
+impl CloudPublishConfig {
+    pub fn from_env() -> Option<Self> {
+        let run_id = std::env::var("ZENE_RUN_ID")
+            .ok()
+            .filter(|s| !s.trim().is_empty())?;
+        let api_url = std::env::var("ZENE_CLOUD_API_URL")
+            .ok()
+            .filter(|s| !s.trim().is_empty())?;
+        let token = std::env::var("ZENE_CLOUD_WORKER_TOKEN")
+            .ok()
+            .filter(|s| !s.trim().is_empty())?;
+        Some(Self {
+            api_url: api_url.trim_end_matches('/').to_string(),
+            token,
+            run_id,
+        })
     }
 }
 
-fn cloud_publish_config() -> Option<CloudPublishConfig> {
-    let run_id = std::env::var("ZENE_RUN_ID")
-        .ok()
-        .filter(|s| !s.trim().is_empty())?;
-    let api_url = std::env::var("ZENE_CLOUD_API_URL")
-        .ok()
-        .filter(|s| !s.trim().is_empty())?;
-    let token = std::env::var("ZENE_CLOUD_WORKER_TOKEN")
-        .ok()
-        .filter(|s| !s.trim().is_empty())?;
-    Some(CloudPublishConfig {
-        api_url: api_url.trim_end_matches('/').to_string(),
-        token,
-        run_id,
-    })
+pub struct PublishGithubTool {
+    config: Option<CloudPublishConfig>,
+}
+
+impl PublishGithubTool {
+    pub fn new() -> Self {
+        Self {
+            config: CloudPublishConfig::from_env(),
+        }
+    }
+
+    pub fn with_config(config: CloudPublishConfig) -> Self {
+        Self {
+            config: Some(config),
+        }
+    }
+
+    pub fn available() -> bool {
+        CloudPublishConfig::from_env().is_some()
+    }
+
+    pub fn is_configured(&self) -> bool {
+        self.config.is_some()
+    }
+}
+
+impl Default for PublishGithubTool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 fn format_publish_result(push: &Value, pr: Option<&Value>) -> String {
@@ -113,9 +139,16 @@ impl Tool for PublishGithubTool {
         } else {
             serde_json::from_str(arguments).context("parse PublishGithub args")?
         };
-        let Some(cfg) = cloud_publish_config() else {
+        let Some(cfg) = self
+            .config
+            .as_ref()
+            .cloned()
+            .or_else(CloudPublishConfig::from_env)
+        else {
             return Ok(ToolResult {
-                content: "PublishGithub is only available in a Zene Cloud session.".into(),
+                content:
+                    "PublishGithub is only available in a Zene Cloud session or when configured."
+                        .into(),
                 is_error: true,
             });
         };

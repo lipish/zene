@@ -1,17 +1,25 @@
-//! Cloud-bound GitHub publish stays on git-broker / Console.
-//! Agents must not `git push` or invoke `gh` themselves.
+//! Git safety policy for protected environments: prevents unintended remote pushes or publish actions.
+//! Agents must not `git push` or invoke `gh` when Git push protection is enabled.
 
-const DENIED: &str = "\
-GitHub publish is handled by Zene Cloud (Commit & Create PR). \
+const DEFAULT_DENIED: &str = "\
+Remote Git push or publish is restricted in this environment. \
 Do not run `git push` or `gh`. Local `git status` / `diff` / `log` / `add` / `commit` is allowed. \
-Keep changes in this workspace so Cloud can commit, push, and open the PR.";
+Keep changes in this workspace.";
 
 pub fn is_cloud_run() -> bool {
     std::env::var_os("ZENE_RUN_ID").is_some()
 }
 
+pub fn deny_git_cli(command: &str) -> Option<String> {
+    deny_git_cli_with_message(command, DEFAULT_DENIED)
+}
+
+pub fn deny_git_cli_with_message(command: &str, message: &str) -> Option<String> {
+    blocked_kind(command).map(|kind| format!("Policy denied `{kind}`: {message}"))
+}
+
 pub fn deny_cloud_github_cli(command: &str) -> Option<String> {
-    blocked_kind(command).map(|kind| format!("Policy denied `{kind}`: {DENIED}"))
+    deny_git_cli(command)
 }
 
 fn blocked_kind(command: &str) -> Option<&'static str> {
@@ -32,10 +40,10 @@ fn command_invokes(bin: &str, command: &str) -> bool {
         if first_command(&segment).is_some_and(|name| name == bin) {
             return true;
         }
-        if first_command(&segment).as_deref() == Some("ssh") {
-            if command_invokes(bin, &ssh_remote_command(&tokenize(&segment)[1..])) {
-                return true;
-            }
+        if first_command(&segment).as_deref() == Some("ssh")
+            && command_invokes(bin, &ssh_remote_command(&tokenize(&segment)[1..]))
+        {
+            return true;
         }
         if quoted_parts(&segment).any(|inner| command_invokes(bin, &inner)) {
             return true;
@@ -128,9 +136,8 @@ fn quoted_parts(segment: &str) -> impl Iterator<Item = String> + '_ {
 fn tokenize(segment: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
-    let mut chars = segment.chars().peekable();
     let mut quote: Option<char> = None;
-    while let Some(c) = chars.next() {
+    for c in segment.chars() {
         if let Some(q) = quote {
             if c == q {
                 quote = None;
@@ -257,7 +264,7 @@ mod tests {
         );
         assert!(deny_cloud_github_cli("git push")
             .unwrap()
-            .contains("Commit & Create PR"));
+            .contains("push or publish is restricted"));
     }
 
     #[test]

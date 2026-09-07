@@ -58,7 +58,7 @@ fn with_cloud_publish(
     mut tools: Vec<Box<dyn crate::registry::Tool>>,
 ) -> Vec<Box<dyn crate::registry::Tool>> {
     if PublishGithubTool::available() {
-        tools.push(Box::new(PublishGithubTool));
+        tools.push(Box::new(PublishGithubTool::new()));
     }
     tools
 }

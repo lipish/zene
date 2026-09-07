@@ -152,10 +152,8 @@ fn format_file_content(
 
 fn truncate_head(lines: &[&str], max_lines: usize, max_bytes: usize) -> (String, bool) {
     let mut result = String::new();
-    let mut line_count = 0usize;
     let mut was_truncated = false;
-
-    for line in lines {
+    for (line_count, line) in lines.iter().enumerate() {
         if line_count >= max_lines {
             was_truncated = true;
             break;
@@ -170,7 +168,6 @@ fn truncate_head(lines: &[&str], max_lines: usize, max_bytes: usize) -> (String,
             break;
         }
         result.push_str(&next);
-        line_count += 1;
     }
 
     (result, was_truncated)
@@ -182,7 +179,7 @@ mod tests {
 
     #[test]
     fn truncate_respects_byte_limit() {
-        let lines: Vec<&str> = vec!["a"; 100].iter().map(|s| *s).collect();
+        let lines: Vec<&str> = vec!["a"; 100];
         let (text, truncated) = truncate_head(&lines, 2000, 10);
         assert!(truncated);
         assert!(text.len() <= 10);

@@ -200,7 +200,8 @@ mod tests {
         // Mirrors prepare_step: plan_filter = tool_policy.plan_mode && plan_mode_active
         let tools = default_builtin_tools();
         let policy = ToolPolicy::subagent();
-        let plan_filter = policy.plan_mode && true;
+        let plan_mode_active = true;
+        let plan_filter = policy.plan_mode && plan_mode_active;
         let defs = tool_definitions_for_llm(&tools, plan_filter);
         assert!(defs.iter().any(|t| t.name == "Write"));
     }

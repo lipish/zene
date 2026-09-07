@@ -77,22 +77,28 @@ mod tests {
 
     #[test]
     fn provider_selection_anthropic_from_config() {
-        let mut config = ZeneConfig::default();
-        config.provider = "anthropic".to_string();
+        let config = ZeneConfig {
+            provider: "anthropic".to_string(),
+            ..Default::default()
+        };
         assert_eq!(selected_provider_kind(&config), ProviderKind::Anthropic);
     }
 
     #[test]
     fn provider_selection_openai_compatible_alias() {
-        let mut config = ZeneConfig::default();
-        config.provider = "openai-compatible".to_string();
+        let config = ZeneConfig {
+            provider: "openai-compatible".to_string(),
+            ..Default::default()
+        };
         assert_eq!(selected_provider_kind(&config), ProviderKind::OpenAi);
     }
 
     #[test]
     fn unknown_provider_errors() {
-        let mut config = ZeneConfig::default();
-        config.provider = "unknown-vendor".to_string();
+        let config = ZeneConfig {
+            provider: "unknown-vendor".to_string(),
+            ..Default::default()
+        };
         let err = config.provider_kind_parse().unwrap_err();
         assert!(err.to_string().contains("unknown provider"));
     }

@@ -925,9 +925,11 @@ mod tests {
             })
             .expect("checkpoint");
 
-        let mut config = ZeneConfig::default();
-        config.provider = "anthropic".into();
-        config.anthropic_api_key = Some("test-key".into());
+        let config = ZeneConfig {
+            provider: "anthropic".into(),
+            anthropic_api_key: Some("test-key".into()),
+            ..Default::default()
+        };
         let agent = zene_core::AgentBuilder::new(
             config,
             LocalSandbox::new(workdir.path()),
@@ -983,9 +985,11 @@ mod tests {
             })
             .expect("resume claim");
 
-        let mut config = ZeneConfig::default();
-        config.provider = "anthropic".into();
-        config.anthropic_api_key = Some("test-key".into());
+        let config = ZeneConfig {
+            provider: "anthropic".into(),
+            anthropic_api_key: Some("test-key".into()),
+            ..Default::default()
+        };
         let agent = zene_core::AgentBuilder::new(
             config,
             LocalSandbox::new(workdir.path()),

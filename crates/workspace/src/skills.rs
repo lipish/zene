@@ -74,8 +74,6 @@ fn split_frontmatter(content: &str) -> Option<(&str, &str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use tempfile::TempDir;
 
     #[test]
     fn format_available_skills_lists_entries() {

@@ -319,159 +319,6 @@ pub struct ContextEngine {
     last_unchanged_reprocessed_est: Option<u64>,
 }
 
-#[cfg(test)]
-mod projection_tests {
-    use super::*;
-    use zene_llm::Message;
-
-    #[test]
-    fn detects_tool_truncation_and_handle_markers() {
-        let messages = vec![
-            Message::tool_result(
-                "call-1",
-                "Read",
-                "preview\n\n[truncated 42 bytes; full output saved to /tmp/out.txt.]",
-            ),
-            Message::tool_result(
-                "call-2",
-                "Bash",
-                "[zene-tool-output path=\"/tmp/handle.txt\" bytes=100]",
-            ),
-        ];
-        let provenance = projection_tool_output_provenance(&messages);
-        assert_eq!(provenance.len(), 2);
-        assert_eq!(provenance[0].kind, "truncated");
-        assert_eq!(
-            provenance[0].handle_reference.as_deref(),
-            Some("/tmp/out.txt")
-        );
-        assert_eq!(provenance[1].kind, "handle");
-        assert_eq!(
-            provenance[1].handle_reference.as_deref(),
-            Some("/tmp/handle.txt")
-        );
-    }
-
-    #[test]
-    fn classifies_injected_sources() {
-        let messages = vec![
-            Message::compaction_summary("summary"),
-            Message::user("<system-reminder>\n<memory-context>memory</memory-context>\nActive todos\n</system-reminder>"),
-        ];
-        let sources = projection_injected_sources(&messages);
-        assert_eq!(sources[0].source, "compaction_event");
-        assert_eq!(sources[1].source, "memory");
-        assert_eq!(sources[2].source, "todos");
-    }
-
-    #[test]
-    fn tail_decorations_keep_prefix_fingerprint_stable() {
-        use crate::tokens::TokenEstimator;
-        use zene_session::SessionRecord;
-
-        let mut engine = ContextEngine::new(128_000);
-        let mut session = SessionRecord::new(std::path::Path::new("/tmp"));
-        session.ensure_system_message("frozen system");
-        session.push_message(Message::user("hello"));
-        session.push_message(Message::assistant("hi"));
-        let estimator = TokenEstimator::default();
-        let tools = [];
-
-        let first = engine.assemble_step(&session, &tools, &estimator);
-        let first_prefix = crate::layout::prefix_fingerprint(&first.messages, 1);
-        let explain_first = engine.explain_projection(&session, &tools, &estimator);
-        assert_eq!(explain_first.prefix_cache.prefix_end, 1);
-        assert_eq!(explain_first.prefix_cache.tail_decoration_count, 0);
-
-        engine.set_step_tail_decorations(vec!["Active todos:\n- [pending] ship".into()]);
-        let second = engine.assemble_step(&session, &tools, &estimator);
-        let explain_second = engine.explain_projection(&session, &tools, &estimator);
-        assert_eq!(explain_second.prefix_cache.prefix_end, 1);
-        assert_eq!(explain_second.prefix_cache.tail_decoration_count, 1);
-        assert!(second
-            .messages
-            .last()
-            .unwrap()
-            .content
-            .as_deref()
-            .unwrap()
-            .contains("ship"));
-        assert_eq!(
-            first_prefix,
-            crate::layout::prefix_fingerprint(&second.messages, 1)
-        );
-
-        engine.set_step_tail_decorations(vec!["You are in Plan mode.".into()]);
-        let third = engine.assemble_step(&session, &tools, &estimator);
-        assert_eq!(
-            first_prefix,
-            crate::layout::prefix_fingerprint(&third.messages, 1)
-        );
-        assert_eq!(
-            engine
-                .explain_projection(&session, &tools, &estimator)
-                .prefix_cache
-                .break_kind,
-            "none"
-        );
-    }
-
-    #[test]
-    fn assemble_relocates_prefix_adjacent_index_block() {
-        use crate::tokens::TokenEstimator;
-        use zene_session::SessionRecord;
-
-        let mut engine = ContextEngine::new(128_000);
-        let mut session = SessionRecord::new(std::path::Path::new("/tmp"));
-        session.ensure_system_message("frozen system");
-        session.push_message(Message::user(
-            "<system-reminder>\n<agent_documents_index>\n</system-reminder>",
-        ));
-        session.push_message(Message::user("hello"));
-        let estimator = TokenEstimator::default();
-        let tools = [];
-        engine.set_step_tail_decorations(vec!["live tail".into()]);
-        let step = engine.assemble_step(&session, &tools, &estimator);
-        assert!(crate::layout::prefix_adjacent_decoration_index(&step.messages).is_none());
-        assert_eq!(step.messages[1].content.as_deref(), Some("hello"));
-        assert!(step
-            .messages
-            .last()
-            .unwrap()
-            .content
-            .as_deref()
-            .unwrap()
-            .contains("live tail"));
-        assert!(!step.messages.iter().any(|message| message
-            .content
-            .as_deref()
-            .is_some_and(|content| content.contains("agent_documents_index"))));
-    }
-
-    #[test]
-    fn system_resize_is_distinct_from_append_only_none() {
-        use crate::tokens::TokenEstimator;
-        use zene_session::SessionRecord;
-
-        let mut engine = ContextEngine::new(128_000);
-        let mut session = SessionRecord::new(std::path::Path::new("/tmp"));
-        session.ensure_system_message("sys v1");
-        session.push_message(Message::user("hello"));
-        let estimator = TokenEstimator::default();
-        let tools = [];
-        let _ = engine.assemble_step(&session, &tools, &estimator);
-
-        session.push_message(Message::assistant("hi"));
-        let append = engine.explain_projection(&session, &tools, &estimator);
-        assert_eq!(append.prefix_cache.break_kind, "none");
-
-        session.update_system_prefix("sys v2 is longer and breaks the prefix");
-        let _ = engine.on_system_prefix_changed("system_prefix");
-        let resized = engine.explain_projection(&session, &tools, &estimator);
-        assert_eq!(resized.prefix_cache.break_kind, "system_resize");
-    }
-}
-
 impl ContextEngine {
     pub fn new(context_window_tokens: u32) -> Self {
         Self {
@@ -1443,5 +1290,158 @@ impl ContextEngine {
             self.last_memory_flush_compaction = marker;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod projection_tests {
+    use super::*;
+    use zene_llm::Message;
+
+    #[test]
+    fn detects_tool_truncation_and_handle_markers() {
+        let messages = vec![
+            Message::tool_result(
+                "call-1",
+                "Read",
+                "preview\n\n[truncated 42 bytes; full output saved to /tmp/out.txt.]",
+            ),
+            Message::tool_result(
+                "call-2",
+                "Bash",
+                "[zene-tool-output path=\"/tmp/handle.txt\" bytes=100]",
+            ),
+        ];
+        let provenance = projection_tool_output_provenance(&messages);
+        assert_eq!(provenance.len(), 2);
+        assert_eq!(provenance[0].kind, "truncated");
+        assert_eq!(
+            provenance[0].handle_reference.as_deref(),
+            Some("/tmp/out.txt")
+        );
+        assert_eq!(provenance[1].kind, "handle");
+        assert_eq!(
+            provenance[1].handle_reference.as_deref(),
+            Some("/tmp/handle.txt")
+        );
+    }
+
+    #[test]
+    fn classifies_injected_sources() {
+        let messages = vec![
+            Message::compaction_summary("summary"),
+            Message::user("<system-reminder>\n<memory-context>memory</memory-context>\nActive todos\n</system-reminder>"),
+        ];
+        let sources = projection_injected_sources(&messages);
+        assert_eq!(sources[0].source, "compaction_event");
+        assert_eq!(sources[1].source, "memory");
+        assert_eq!(sources[2].source, "todos");
+    }
+
+    #[test]
+    fn tail_decorations_keep_prefix_fingerprint_stable() {
+        use crate::tokens::TokenEstimator;
+        use zene_session::SessionRecord;
+
+        let mut engine = ContextEngine::new(128_000);
+        let mut session = SessionRecord::new(std::path::Path::new("/tmp"));
+        session.ensure_system_message("frozen system");
+        session.push_message(Message::user("hello"));
+        session.push_message(Message::assistant("hi"));
+        let estimator = TokenEstimator::default();
+        let tools = [];
+
+        let first = engine.assemble_step(&session, &tools, &estimator);
+        let first_prefix = crate::layout::prefix_fingerprint(&first.messages, 1);
+        let explain_first = engine.explain_projection(&session, &tools, &estimator);
+        assert_eq!(explain_first.prefix_cache.prefix_end, 1);
+        assert_eq!(explain_first.prefix_cache.tail_decoration_count, 0);
+
+        engine.set_step_tail_decorations(vec!["Active todos:\n- [pending] ship".into()]);
+        let second = engine.assemble_step(&session, &tools, &estimator);
+        let explain_second = engine.explain_projection(&session, &tools, &estimator);
+        assert_eq!(explain_second.prefix_cache.prefix_end, 1);
+        assert_eq!(explain_second.prefix_cache.tail_decoration_count, 1);
+        assert!(second
+            .messages
+            .last()
+            .unwrap()
+            .content
+            .as_deref()
+            .unwrap()
+            .contains("ship"));
+        assert_eq!(
+            first_prefix,
+            crate::layout::prefix_fingerprint(&second.messages, 1)
+        );
+
+        engine.set_step_tail_decorations(vec!["You are in Plan mode.".into()]);
+        let third = engine.assemble_step(&session, &tools, &estimator);
+        assert_eq!(
+            first_prefix,
+            crate::layout::prefix_fingerprint(&third.messages, 1)
+        );
+        assert_eq!(
+            engine
+                .explain_projection(&session, &tools, &estimator)
+                .prefix_cache
+                .break_kind,
+            "none"
+        );
+    }
+
+    #[test]
+    fn assemble_relocates_prefix_adjacent_index_block() {
+        use crate::tokens::TokenEstimator;
+        use zene_session::SessionRecord;
+
+        let mut engine = ContextEngine::new(128_000);
+        let mut session = SessionRecord::new(std::path::Path::new("/tmp"));
+        session.ensure_system_message("frozen system");
+        session.push_message(Message::user(
+            "<system-reminder>\n<agent_documents_index>\n</system-reminder>",
+        ));
+        session.push_message(Message::user("hello"));
+        let estimator = TokenEstimator::default();
+        let tools = [];
+        engine.set_step_tail_decorations(vec!["live tail".into()]);
+        let step = engine.assemble_step(&session, &tools, &estimator);
+        assert!(crate::layout::prefix_adjacent_decoration_index(&step.messages).is_none());
+        assert_eq!(step.messages[1].content.as_deref(), Some("hello"));
+        assert!(step
+            .messages
+            .last()
+            .unwrap()
+            .content
+            .as_deref()
+            .unwrap()
+            .contains("live tail"));
+        assert!(!step.messages.iter().any(|message| message
+            .content
+            .as_deref()
+            .is_some_and(|content| content.contains("agent_documents_index"))));
+    }
+
+    #[test]
+    fn system_resize_is_distinct_from_append_only_none() {
+        use crate::tokens::TokenEstimator;
+        use zene_session::SessionRecord;
+
+        let mut engine = ContextEngine::new(128_000);
+        let mut session = SessionRecord::new(std::path::Path::new("/tmp"));
+        session.ensure_system_message("sys v1");
+        session.push_message(Message::user("hello"));
+        let estimator = TokenEstimator::default();
+        let tools = [];
+        let _ = engine.assemble_step(&session, &tools, &estimator);
+
+        session.push_message(Message::assistant("hi"));
+        let append = engine.explain_projection(&session, &tools, &estimator);
+        assert_eq!(append.prefix_cache.break_kind, "none");
+
+        session.update_system_prefix("sys v2 is longer and breaks the prefix");
+        let _ = engine.on_system_prefix_changed("system_prefix");
+        let resized = engine.explain_projection(&session, &tools, &estimator);
+        assert_eq!(resized.prefix_cache.break_kind, "system_resize");
     }
 }

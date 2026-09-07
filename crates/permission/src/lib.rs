@@ -13,6 +13,7 @@ pub use broker::{
     ApprovalBroker, ApprovalRequest, AutoApprovalBroker, SharedApprovalBroker,
     TerminalApprovalBroker,
 };
+pub use cloud_github::{deny_cloud_github_cli, deny_git_cli, deny_git_cli_with_message};
 
 /// Shared permission gate used by main agent and subagents.
 pub trait ToolPermission: Send + Sync {
@@ -136,6 +137,7 @@ pub struct PermissionGate {
     rules: Vec<PermissionRule>,
     prompter: Box<PermissionPrompter>,
     auto_allow_bash: bool,
+    deny_git_push: bool,
 }
 
 impl PermissionGate {
@@ -146,6 +148,7 @@ impl PermissionGate {
             rules: Vec::new(),
             prompter: Box::new(default_prompter),
             auto_allow_bash: false,
+            deny_git_push: cloud_github::is_cloud_run(),
         }
     }
 
@@ -156,6 +159,7 @@ impl PermissionGate {
             rules: Vec::new(),
             prompter,
             auto_allow_bash: false,
+            deny_git_push: cloud_github::is_cloud_run(),
         }
     }
 
@@ -169,12 +173,25 @@ impl PermissionGate {
         self
     }
 
+    pub fn with_deny_git_push(mut self, deny: bool) -> Self {
+        self.deny_git_push = deny;
+        self
+    }
+
     pub fn set_auto_allow_bash(&mut self, enabled: bool) {
         self.auto_allow_bash = enabled;
     }
 
     pub fn auto_allow_bash(&self) -> bool {
         self.auto_allow_bash
+    }
+
+    pub fn set_deny_git_push(&mut self, deny: bool) {
+        self.deny_git_push = deny;
+    }
+
+    pub fn deny_git_push(&self) -> bool {
+        self.deny_git_push
     }
 
     pub fn set_rules(&mut self, rules: Vec<PermissionRule>) {
@@ -187,6 +204,7 @@ impl PermissionGate {
 
     pub fn inherit_policy_from(&mut self, other: &Self) {
         self.auto_allow_bash = other.auto_allow_bash;
+        self.deny_git_push = other.deny_git_push;
         self.rules = other.rules.clone();
         self.approved_session = other.approved_session.clone();
     }
@@ -207,9 +225,14 @@ impl PermissionGate {
         self.rules.iter().find(|r| r.matches(tool_name))
     }
 
+    /// Check if a tool call is denied by policy configured on this gate.
+    pub fn policy_denied(&self, tool_name: &str, arguments: &str) -> Option<String> {
+        policy_denied_with_git_push(tool_name, arguments, self.deny_git_push)
+    }
+
     /// Classify a tool call without talking to a user.
     pub fn evaluate(&self, tool_name: &str, arguments: &str) -> PolicyDecision {
-        if policy_denied(tool_name, arguments).is_some() {
+        if self.policy_denied(tool_name, arguments).is_some() {
             return PolicyDecision::Deny;
         }
 
@@ -296,15 +319,19 @@ impl PermissionGate {
 }
 
 /// Hard deny Write/Edit under protected path segments (aligned with sandbox `.git` rules).
-/// Cloud runs also deny `git push` / `gh` so publish stays on git-broker.
+/// Also denies `git push` / `gh` when `deny_git_push` is true.
 pub fn policy_denied(tool_name: &str, arguments: &str) -> Option<String> {
-    policy_denied_inner(tool_name, arguments, cloud_github::is_cloud_run())
+    policy_denied_with_git_push(tool_name, arguments, cloud_github::is_cloud_run())
 }
 
-fn policy_denied_inner(tool_name: &str, arguments: &str, cloud_run: bool) -> Option<String> {
-    if cloud_run && matches!(tool_name, "Bash") {
+pub fn policy_denied_with_git_push(
+    tool_name: &str,
+    arguments: &str,
+    deny_git_push: bool,
+) -> Option<String> {
+    if deny_git_push && matches!(tool_name, "Bash") {
         if let Some(command) = extract_bash_command(arguments) {
-            if let Some(msg) = cloud_github::deny_cloud_github_cli(&command) {
+            if let Some(msg) = cloud_github::deny_git_cli(&command) {
                 return Some(msg);
             }
         }
@@ -588,13 +615,25 @@ mod tests {
     }
 
     #[test]
-    fn cloud_run_blocks_git_push_and_gh() {
-        let push = policy_denied_inner("Bash", r#"{"command":"git push origin HEAD"}"#, true);
+    fn git_push_protection_blocks_git_push_and_gh() {
+        let push =
+            policy_denied_with_git_push("Bash", r#"{"command":"git push origin HEAD"}"#, true);
         assert!(push.unwrap().contains("git push"));
-        let gh = policy_denied_inner("Bash", r#"{"command":"gh pr create"}"#, true);
+        let gh = policy_denied_with_git_push("Bash", r#"{"command":"gh pr create"}"#, true);
         assert!(gh.unwrap().contains("`gh`"));
-        assert!(policy_denied_inner("Bash", r#"{"command":"git status"}"#, true).is_none());
-        assert!(policy_denied_inner("Bash", r#"{"command":"git push"}"#, false).is_none());
+        assert!(policy_denied_with_git_push("Bash", r#"{"command":"git status"}"#, true).is_none());
+        assert!(policy_denied_with_git_push("Bash", r#"{"command":"git push"}"#, false).is_none());
+
+        let mut gate = PermissionGate::new(PermissionMode::Yolo).with_deny_git_push(true);
+        assert_eq!(
+            gate.evaluate("Bash", r#"{"command":"git push"}"#),
+            PolicyDecision::Deny
+        );
+        gate.set_deny_git_push(false);
+        assert_eq!(
+            gate.evaluate("Bash", r#"{"command":"git push"}"#),
+            PolicyDecision::Allow
+        );
     }
 
     #[test]

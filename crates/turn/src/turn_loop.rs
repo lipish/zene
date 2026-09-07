@@ -372,11 +372,6 @@ where
                         .run_tools(&tool_calls, request.options, request.cancel)
                         .await?;
                     if tool_outcome == ToolBatchOutcome::Terminate {
-                        if ports.inject_steer(request.options)?
-                            || ports.inject_follow_up(request.options)?
-                        {
-                            continue;
-                        }
                         status = Some(TurnStatus::Terminated);
                         break;
                     }
