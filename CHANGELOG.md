@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## v0.1.16 (2026-09-07)
+
+### Added
+- **Minimalist Agent Facade (`zene-core`)**:
+  - Convenient factories `Agent::builder(workdir)`, `Agent::core(workdir)`, and `Agent::minimal(workdir)` with zero boilerplate setup.
+  - Builder configuration helpers: `.core_tools()`, `.minimal_tools()`, `.bypass_permissions()`, `.config()`, `.session()`.
+  - Re-exported core SDK types directly from `zene-core` (`ZeneConfig`, `ChatClient`, `LocalSandbox`, `Sandbox`, `SessionRecord`, `core_tools`, `minimal_tools`, `ToolRegistry`, `ToolCatalog`).
+- **Core Toolsets Convergence (`zene-tools`)**:
+  - `core_tools()`: lightweight harness toolset (`Read`, `Write`, `Edit`, `Bash`, `Grep`, `Glob`) without external network or service coupling.
+  - `minimal_tools()`: read-only inspection toolset (`Read`, `Grep`, `Glob`).
+- **Pi-Aligned Turn Control & Extension Hooks**:
+  - Support for steer and follow-up buffers (`SteerBuffer`, `FollowUpBuffer`).
+  - Host-facing lifecycle hooks (`ExtensionHook`, `HookRunner`) and dynamic tool gating.
+
+### Changed
+- **Architectural Boundary Convergence**:
+  - Decoupled cloud platform, web consoles, and multi-tenant control plane into `zene-cloud`.
+  - Realigned `zene` as a dedicated, open, headless agent harness (ACP, turns, context projection, sandbox, durable session).
+  - Merged `tool-runtime` into `zene-tools` and streamlined permission models.
+
 ## v0.1.15 (2026-08-23)
 
 ### Fixed
