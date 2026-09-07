@@ -107,6 +107,58 @@ impl AgentBuilder {
         }
     }
 
+    /// Construct a builder initialized with default configuration and runtime primitives for `workdir`.
+    pub fn for_workdir(workdir: impl AsRef<std::path::Path>) -> Self {
+        let workdir = workdir.as_ref();
+        let config = ZeneConfig::load(workdir).unwrap_or_default();
+        let sandbox = LocalSandbox::new(workdir);
+        let session = SessionRecord::new(workdir);
+        let permission_mode = PermissionMode::parse(&config.permission_mode);
+        Self::new(config, sandbox, session, permission_mode)
+    }
+
+    /// Override the agent configuration.
+    pub fn config(mut self, config: ZeneConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Override the sandbox.
+    pub fn sandbox(mut self, sandbox: LocalSandbox) -> Self {
+        self.sandbox = sandbox;
+        self
+    }
+
+    /// Override the session record.
+    pub fn session(mut self, session: SessionRecord) -> Self {
+        self.session = session;
+        self
+    }
+
+    /// Override the permission mode.
+    pub fn permission_mode(mut self, permission_mode: PermissionMode) -> Self {
+        self.permission_mode = permission_mode;
+        self
+    }
+
+    /// Bypass permission checks (convenience for scripts and testing).
+    pub fn bypass_permissions(mut self) -> Self {
+        self.permission_mode = PermissionMode::BypassPermissions;
+        self
+    }
+
+    /// Use the minimalist core toolset (read, write, edit, bash, grep, glob).
+    pub fn core_tools(mut self) -> Self {
+        self.tools = Some(zene_tools::core_tools());
+        self
+    }
+
+    /// Use the read-only minimal toolset (read, grep, glob).
+    pub fn minimal_tools(mut self) -> Self {
+        self.tools = Some(zene_tools::minimal_tools());
+        self
+    }
+
     /// Use a pre-built chat client instead of `ChatClient::from_config`.
     pub fn client(mut self, client: ChatClient) -> Self {
         self.client = Some(client);

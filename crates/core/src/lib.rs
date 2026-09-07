@@ -3,22 +3,25 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use zene_config::ZeneConfig;
+pub use zene_config::ZeneConfig;
 use zene_context::{ContextDeps, ContextEngine, PrefireClientFactory};
-use zene_llm::{ChatClient, Message, TokenUsage, ToolCall};
+pub use zene_llm::ChatClient;
+use zene_llm::{Message, TokenUsage, ToolCall};
 
 use zene_mcp::McpManager;
 use zene_model_executor::ModelExecutor;
-use zene_sandbox::{LocalSandbox, Sandbox};
+pub use zene_sandbox::{LocalSandbox, Sandbox};
 use zene_session::{
     fork_session, latest_checkpoint_id, load_checkpoint, restore_checkpoint, save_checkpoint,
-    AgentRecordWriter, ExecutionCheckpointState, RecordEntry, SessionRecord,
+    AgentRecordWriter, ExecutionCheckpointState, RecordEntry,
 };
-pub use zene_session::{RecoveryDisposition, RecoveryExecution, RecoverySnapshot};
-pub use zene_tools::AskUserOption;
+pub use zene_session::{RecoveryDisposition, RecoveryExecution, RecoverySnapshot, SessionRecord};
+pub use zene_tools::{
+    builtin_tools, core_tools, minimal_tools, AskUserOption, ToolCatalog, ToolRegistry,
+};
 use zene_tools::{
     shared_todo_store_from, RuntimeScope, SharedAskUserPrompter, SharedBackgroundTasks,
-    SharedPlanMode, SharedTodoStore, ToolCatalog, ToolRegistry,
+    SharedPlanMode, SharedTodoStore,
 };
 
 mod agent_builder;
@@ -127,6 +130,25 @@ impl Default for PromptOptions {
 }
 
 impl Agent {
+    /// Create a fluent builder initialized with defaults for `workdir`.
+    pub fn builder(workdir: impl AsRef<std::path::Path>) -> AgentBuilder {
+        AgentBuilder::for_workdir(workdir)
+    }
+
+    /// Create a minimalist agent builder with core tools only (read, write, edit, bash, grep, glob) and no MCP.
+    pub fn core(workdir: impl AsRef<std::path::Path>) -> AgentBuilder {
+        AgentBuilder::for_workdir(workdir)
+            .without_mcp()
+            .core_tools()
+    }
+
+    /// Create a read-only minimal agent builder (read, grep, glob) and no MCP.
+    pub fn minimal(workdir: impl AsRef<std::path::Path>) -> AgentBuilder {
+        AgentBuilder::for_workdir(workdir)
+            .without_mcp()
+            .minimal_tools()
+    }
+
     pub async fn new(
         config: ZeneConfig,
         sandbox: LocalSandbox,
