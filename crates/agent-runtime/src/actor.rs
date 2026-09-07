@@ -902,7 +902,6 @@ mod tests {
         use chrono::Utc;
         use tempfile::tempdir;
         use zene_config::ZeneConfig;
-        use zene_sandbox::LocalSandbox;
         use zene_session::{
             AgentRecordWriter, ExecutionCheckpointState, RecordEntry, SessionRecord,
         };
@@ -930,17 +929,15 @@ mod tests {
             anthropic_api_key: Some("test-key".into()),
             ..Default::default()
         };
-        let agent = zene_core::AgentBuilder::new(
-            config,
-            LocalSandbox::new(workdir.path()),
-            session,
-            zene_permission::PermissionMode::BypassPermissions,
-        )
-        .without_mcp()
-        .record_writer(writer)
-        .build()
-        .await
-        .expect("build agent without network calls");
+        let agent = zene_core::Agent::builder(workdir.path())
+            .config(config)
+            .session(session)
+            .bypass_permissions()
+            .without_mcp()
+            .record_writer(writer)
+            .build()
+            .await
+            .expect("build agent without network calls");
         let (runtime, task) = RuntimeHandle::spawn_with_automatic_recovery(agent);
 
         assert_eq!(
@@ -962,7 +959,6 @@ mod tests {
         use chrono::Utc;
         use tempfile::tempdir;
         use zene_config::ZeneConfig;
-        use zene_sandbox::LocalSandbox;
         use zene_session::{
             AgentRecordWriter, ExecutionCheckpointState, RecordEntry, SessionRecord,
         };
@@ -990,17 +986,15 @@ mod tests {
             anthropic_api_key: Some("test-key".into()),
             ..Default::default()
         };
-        let agent = zene_core::AgentBuilder::new(
-            config,
-            LocalSandbox::new(workdir.path()),
-            session,
-            zene_permission::PermissionMode::BypassPermissions,
-        )
-        .without_mcp()
-        .record_writer(writer)
-        .build()
-        .await
-        .expect("build agent without network calls");
+        let agent = zene_core::Agent::builder(workdir.path())
+            .config(config)
+            .session(session)
+            .bypass_permissions()
+            .without_mcp()
+            .record_writer(writer)
+            .build()
+            .await
+            .expect("build agent without network calls");
         let (runtime, task) = RuntimeHandle::spawn(agent);
 
         assert_eq!(

@@ -22,6 +22,28 @@ pub fn builtin_tools(web_search: WebSearchConfig) -> ToolRegistry {
     ToolRegistry::new(all_builtin_tool_boxes(web_search))
 }
 
+/// Minimal core harness tools: file operations (Read, Write, Edit), search (Grep, Glob), and shell (Bash).
+/// Excludes external services, browser web search, and plan/todo collaboration suites.
+pub fn core_tools() -> ToolRegistry {
+    ToolRegistry::new(vec![
+        Box::new(ReadTool),
+        Box::new(WriteTool),
+        Box::new(EditTool),
+        Box::new(BashTool),
+        Box::new(GrepTool),
+        Box::new(GlobTool),
+    ])
+}
+
+/// Read-only inspection tools: Read, Grep, Glob.
+pub fn minimal_tools() -> ToolRegistry {
+    ToolRegistry::new(vec![
+        Box::new(ReadTool),
+        Box::new(GrepTool),
+        Box::new(GlobTool),
+    ])
+}
+
 pub fn agent_tools(profile: AgentProfile, web_search: WebSearchConfig) -> ToolRegistry {
     match profile {
         AgentProfile::Full => builtin_tools(web_search),
@@ -164,5 +186,29 @@ mod tests {
         {
             assert!(!names.iter().any(|n| n == "PublishGithub"));
         }
+    }
+
+    #[test]
+    fn core_and_minimal_tools_contain_expected_tools() {
+        let core = core_tools();
+        let core_names: Vec<String> = core.definitions().into_iter().map(|d| d.name).collect();
+        assert_eq!(core_names.len(), 6);
+        assert!(core_names.contains(&"Read".into()));
+        assert!(core_names.contains(&"Write".into()));
+        assert!(core_names.contains(&"Edit".into()));
+        assert!(core_names.contains(&"Bash".into()));
+        assert!(core_names.contains(&"Grep".into()));
+        assert!(core_names.contains(&"Glob".into()));
+        assert!(!core_names.contains(&"WebSearch".into()));
+        assert!(!core_names.contains(&"FetchUrl".into()));
+
+        let minimal = minimal_tools();
+        let min_names: Vec<String> = minimal.definitions().into_iter().map(|d| d.name).collect();
+        assert_eq!(min_names.len(), 3);
+        assert!(min_names.contains(&"Read".into()));
+        assert!(min_names.contains(&"Grep".into()));
+        assert!(min_names.contains(&"Glob".into()));
+        assert!(!min_names.contains(&"Write".into()));
+        assert!(!min_names.contains(&"Bash".into()));
     }
 }

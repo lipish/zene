@@ -35,7 +35,9 @@ pub use background::{
     shared_background_tasks, BackgroundTask, BackgroundTaskKind, BackgroundTaskStatus,
     BackgroundTaskStore, SharedBackgroundTasks,
 };
-pub use builtin::{agent_tools, builtin_tools, default_builtin_tools, tools_for_profile};
+pub use builtin::{
+    agent_tools, builtin_tools, core_tools, default_builtin_tools, minimal_tools, tools_for_profile,
+};
 pub use fetch_url::FetchUrlTool;
 pub use line_endings::{
     detect_line_ending_style, make_carriage_returns_visible, materialize_model_text,
