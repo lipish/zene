@@ -250,9 +250,11 @@ mod tests {
     #[tokio::test]
     async fn prepare_context_projects_session_messages() {
         let workdir = tempfile::tempdir().expect("workdir");
-        let mut config = zene_config::ZeneConfig::default();
-        config.provider = "anthropic".into();
-        config.anthropic_api_key = Some("test-key".into());
+        let config = zene_config::ZeneConfig {
+            provider: "anthropic".into(),
+            anthropic_api_key: Some("test-key".into()),
+            ..Default::default()
+        };
         let session = zene_session::SessionRecord::new(workdir.path());
         let mut agent = crate::AgentBuilder::new(
             config,

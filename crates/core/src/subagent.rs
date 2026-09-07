@@ -549,10 +549,12 @@ mod tests {
         )))
     }
 
+    type FirstCallHook = Box<dyn Fn(&ModelRequest) + Send + Sync>;
+
     struct ScriptedBackend {
         responses: Vec<ModelResponse>,
         calls: AtomicUsize,
-        on_first_call: Option<Box<dyn Fn(&ModelRequest) + Send + Sync>>,
+        on_first_call: Option<FirstCallHook>,
     }
 
     impl ScriptedBackend {
@@ -738,8 +740,10 @@ mod tests {
     async fn subagent_uses_shared_turn_engine_step_budget() {
         let dir = tempdir().unwrap();
         let sandbox = zene_sandbox::into_arc(LocalSandbox::new(dir.path()));
-        let mut config = ZeneConfig::default();
-        config.max_turns = 1;
+        let config = ZeneConfig {
+            max_turns: 1,
+            ..Default::default()
+        };
         let backend = ScriptedBackend::new(vec![ModelResponse {
             message: Message::assistant_with_tools(
                 None,

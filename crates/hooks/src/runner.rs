@@ -193,12 +193,11 @@ impl HookRunner {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use super::*;
     use tempfile::TempDir;
+    use tokio::sync::Mutex;
 
-    static TEST_LOCK: Mutex<()> = Mutex::new(());
+    static TEST_LOCK: Mutex<()> = Mutex::const_new(());
 
     fn sample_hook(event: &str, script: &str) -> (TempDir, HookRunner) {
         let temp = TempDir::new().expect("tempdir");
@@ -234,7 +233,7 @@ mod tests {
 
     #[tokio::test]
     async fn pre_tool_use_blocks_on_non_zero_exit() {
-        let _guard = TEST_LOCK.lock().expect("test lock");
+        let _guard = TEST_LOCK.lock().await;
         let (_temp, runner) = sample_hook(
             "PreToolUse",
             r#"cat >/dev/null; echo "not allowed" >&2; exit 1"#,
@@ -250,7 +249,7 @@ mod tests {
 
     #[tokio::test]
     async fn pre_tool_use_terminates_on_exit_code_2() {
-        let _guard = TEST_LOCK.lock().expect("test lock");
+        let _guard = TEST_LOCK.lock().await;
         let (_temp, runner) = sample_hook(
             "PreToolUse",
             r#"cat >/dev/null; echo "security violation" >&2; exit 2"#,
@@ -266,7 +265,7 @@ mod tests {
 
     #[tokio::test]
     async fn pre_tool_use_terminates_on_json_output() {
-        let _guard = TEST_LOCK.lock().expect("test lock");
+        let _guard = TEST_LOCK.lock().await;
         let (_temp, runner) = sample_hook(
             "PreToolUse",
             r#"cat >/dev/null; echo '{"block":true,"reason":"policy stop","terminate":true}'; exit 0"#,
@@ -303,7 +302,7 @@ mod tests {
 
     #[tokio::test]
     async fn pre_tool_use_allows_success() {
-        let _guard = TEST_LOCK.lock().expect("test lock");
+        let _guard = TEST_LOCK.lock().await;
         let (_temp, runner) = sample_hook("PreToolUse", "cat > /dev/null; exit 0");
         let block = runner
             .run_pre_tool_use("Read", r#"{"path":"foo.rs"}"#)
@@ -314,7 +313,7 @@ mod tests {
 
     #[tokio::test]
     async fn post_tool_use_does_not_block() {
-        let _guard = TEST_LOCK.lock().expect("test lock");
+        let _guard = TEST_LOCK.lock().await;
         let (_temp, runner) =
             sample_hook("PostToolUse", "cat >/dev/null; echo blocked >&2; exit 1");
         runner.run_post_tool_use("Read", "{}").await;
@@ -322,7 +321,7 @@ mod tests {
 
     #[tokio::test]
     async fn hook_receives_json_on_stdin() {
-        let _guard = TEST_LOCK.lock().expect("test lock");
+        let _guard = TEST_LOCK.lock().await;
         let temp = TempDir::new().expect("tempdir");
         let script = r#"read payload; echo "$payload" | grep -q '"tool":"Bash"' || exit 2"#;
         let runner = HookRunner::with_bash(

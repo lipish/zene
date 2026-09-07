@@ -1,7 +1,7 @@
 use crate::skills::format_available_skills;
 use crate::WorkspaceProvider;
 
-const CLOUD_GITHUB_RULE: &str = "\
+pub const CLOUD_GITHUB_RULE: &str = "\
 # Cloud GitHub
 
 This session is bound to a GitHub App installation. \
@@ -16,6 +16,21 @@ pub fn build_system_prompt(
     base: &str,
     provider: &dyn WorkspaceProvider,
     include_workspace_context: bool,
+) -> String {
+    build_system_prompt_ext(
+        base,
+        provider,
+        include_workspace_context,
+        std::env::var_os("ZENE_RUN_ID").is_some(),
+    )
+}
+
+/// Combine base system prompt with optional workspace context and optional git publish rules.
+pub fn build_system_prompt_ext(
+    base: &str,
+    provider: &dyn WorkspaceProvider,
+    include_workspace_context: bool,
+    include_github_rule: bool,
 ) -> String {
     let mut prompt = if !include_workspace_context {
         base.to_string()
@@ -34,7 +49,7 @@ pub fn build_system_prompt(
 
         sections.join("\n\n")
     };
-    if std::env::var_os("ZENE_RUN_ID").is_some() {
+    if include_github_rule {
         prompt.push_str("\n\n");
         prompt.push_str(CLOUD_GITHUB_RULE);
     }
@@ -70,5 +85,8 @@ mod tests {
         assert!(prompt.contains("Use Rust."));
         assert!(prompt.contains("# Workspace"));
         assert!(!prompt.contains("Cloud GitHub"));
+
+        let prompt_with_github = build_system_prompt_ext("Base prompt.", &provider, true, true);
+        assert!(prompt_with_github.contains("Cloud GitHub"));
     }
 }

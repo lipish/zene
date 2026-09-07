@@ -76,9 +76,9 @@ impl OutputSanitizer {
                 in_failure_section = true;
             }
 
-            if in_failure_section {
-                result.push(line);
-            } else if trimmed.starts_with("test ") && trimmed.ends_with("... FAILED") {
+            if in_failure_section
+                || (trimmed.starts_with("test ") && trimmed.ends_with("... FAILED"))
+            {
                 result.push(line);
             }
         }

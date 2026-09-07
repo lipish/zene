@@ -180,7 +180,7 @@ impl StreamAccumulator {
                 );
             }
             StreamEvent::Done { usage } => {
-                self.usage = usage.clone();
+                self.usage = *usage;
                 return true;
             }
             StreamEvent::ThoughtDelta(_) => {}

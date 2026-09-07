@@ -8,8 +8,8 @@ use zene_tools::{default_builtin_tools, shared_todo_store_from, ToolContext};
 
 #[tokio::test]
 async fn todo_write_persists_across_session_reload() {
-    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _guard = LOCK.lock().expect("test lock");
+    static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _guard = LOCK.lock().await;
     let home = tempfile::tempdir().expect("tempdir");
     let prev = env::var("ZENE_HOME").ok();
     env::set_var("ZENE_HOME", home.path());
@@ -43,8 +43,10 @@ async fn todo_write_persists_across_session_reload() {
         .expect("TodoWrite should run");
     assert!(!result.is_error);
 
-    let store = store.lock();
-    session.todos = store.to_items();
+    {
+        let store = store.lock();
+        session.todos = store.to_items();
+    }
 
     session.save().expect("save session");
     let loaded = SessionRecord::load(&session.meta.id).expect("load session");

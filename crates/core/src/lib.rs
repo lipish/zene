@@ -58,7 +58,8 @@ pub use zene_hooks::{
     ExtensionHook, HookBlock, HookEvent, HookOutcome, HookPayload, HookRunner, HookSpec,
 };
 pub use zene_permission::{
-    approve_tool_call, policy_denied, resolve_permission, ApprovalBroker, ApprovalRequest,
+    approve_tool_call, deny_cloud_github_cli, deny_git_cli, policy_denied,
+    policy_denied_with_git_push, resolve_permission, ApprovalBroker, ApprovalRequest,
     AutoApprovalBroker, PermissionGate, PermissionMode, PermissionPrompter, PermissionRule,
     PolicyDecision, PromptChoice, RuleAction, SharedApprovalBroker, SharedToolPermission,
     TerminalApprovalBroker, ToolPermission,

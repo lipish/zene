@@ -47,7 +47,7 @@ pub use output_bound::{
 };
 pub use permission::{SharedToolPermission, ToolPermission};
 pub use plan_mode::{shared_plan_mode, PlanModeState, SharedPlanMode};
-pub use publish_github::PublishGithubTool;
+pub use publish_github::{CloudPublishConfig, PublishGithubTool};
 pub use registry::{Tool, ToolCatalog, ToolContext, ToolRegistry, ToolResult};
 pub use scope::{RuntimeScope, SessionPersistence, SessionPolicy, ToolPolicy};
 pub use spill_store::{apply_tool_bound_plan, FsToolOutputStore, ToolOutputStore};

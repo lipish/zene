@@ -900,17 +900,17 @@ async fn run_prompt_job(
                             tool_call_id,
                         } = &event.kind
                         {
-                            tokio::spawn(handle_runtime_approval(
-                                Arc::clone(&runtime),
-                                writer.clone(),
-                                sid.clone(),
-                                permission_mode.clone(),
-                                Arc::clone(&pending_tool),
-                                request_id.clone(),
-                                tool_name.clone(),
-                                arguments.clone(),
-                                tool_call_id.clone(),
-                            ));
+                            tokio::spawn(handle_runtime_approval(RuntimeApprovalParams {
+                                runtime: Arc::clone(&runtime),
+                                writer: writer.clone(),
+                                session_id: sid.clone(),
+                                permission_mode: permission_mode.clone(),
+                                pending_tool: Arc::clone(&pending_tool),
+                                request_id: request_id.clone(),
+                                tool_name: tool_name.clone(),
+                                arguments: arguments.clone(),
+                                tool_call_id: tool_call_id.clone(),
+                            }));
                         }
                         project_runtime_event(
                             &writer,
@@ -930,7 +930,7 @@ async fn run_prompt_job(
     }
 }
 
-async fn handle_runtime_approval(
+struct RuntimeApprovalParams {
     runtime: Arc<dyn RuntimeControl>,
     writer: AcpWriter,
     session_id: String,
@@ -940,9 +940,12 @@ async fn handle_runtime_approval(
     tool_name: String,
     arguments: String,
     tool_call_id: Option<String>,
-) {
-    let tool_call_id = tool_call_id.unwrap_or_else(|| {
-        pending_tool
+}
+
+async fn handle_runtime_approval(params: RuntimeApprovalParams) {
+    let tool_call_id = params.tool_call_id.unwrap_or_else(|| {
+        params
+            .pending_tool
             .lock()
             .unwrap()
             .id
@@ -950,17 +953,17 @@ async fn handle_runtime_approval(
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
     });
     let preview = ApprovalRequest {
-        request_id: request_id.clone(),
-        tool_name: tool_name.clone(),
-        arguments,
+        request_id: params.request_id.clone(),
+        tool_name: params.tool_name.clone(),
+        arguments: params.arguments,
         tool_call_id: Some(tool_call_id.clone()),
     }
     .preview();
     let decision = match acp_permission_prompt(
-        &writer,
-        &session_id,
-        &permission_mode,
-        &tool_name,
+        &params.writer,
+        &params.session_id,
+        &params.permission_mode,
+        &params.tool_name,
         &preview,
         &tool_call_id,
     )
@@ -968,11 +971,11 @@ async fn handle_runtime_approval(
     {
         Ok(choice) => approval_decision(choice),
         Err(err) => {
-            warn!(error = %err, request_id = %request_id, "ACP permission prompt failed");
+            warn!(error = %err, request_id = %params.request_id, "ACP permission prompt failed");
             ApprovalDecision::Deny
         }
     };
-    if let Err(err) = runtime.approve(request_id, decision).await {
+    if let Err(err) = params.runtime.approve(params.request_id, decision).await {
         warn!(error = %err, "runtime approval resolve failed");
     }
 }
